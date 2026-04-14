@@ -1,5 +1,6 @@
 const STATUS_OPTIONS = ["Pendiente", "En revisión", "Pedido", "Recibido", "Cancelado", "No necesario"];
 const CLOSED_STATES = new Set(["recibido", "cancelado", "no necesario"]);
+const AUTO_REFRESH_MS = 60000;
 
 const state = {
   requests: [],
@@ -38,11 +39,15 @@ const dom = {
   cimaLoading: document.getElementById("cimaLoading"),
   cimaSelection: document.getElementById("cimaSelection"),
   supplyFeedback: document.getElementById("supplyFeedback"),
+  counterPendiente: document.getElementById("counterPendiente"),
+  counterRevision: document.getElementById("counterRevision"),
+  counterPedidoReciente: document.getElementById("counterPedidoReciente"),
 };
 
 document.addEventListener("DOMContentLoaded", () => {
   bindEvents();
   loadRequests();
+  setupAutoRefresh();
 });
 
 function bindEvents() {
@@ -86,9 +91,11 @@ function bindEvents() {
   });
 }
 
-async function loadRequests() {
-  setLoading(true);
-  clearMessage();
+async function loadRequests({ silent = false } = {}) {
+  if (!silent) {
+    setLoading(true);
+    clearMessage();
+  }
 
   try {
     const response = await fetch(`${API_URL}?action=list`);
@@ -103,9 +110,13 @@ async function loadRequests() {
     populateEstadoFilter(list);
     renderTable();
   } catch (error) {
-    showMessage(`No se pudieron cargar solicitudes. Verifica conexión con Google Apps Script (${error.message}).`, "error");
+    if (!silent) {
+      showMessage(`No se pudieron cargar solicitudes. Verifica conexión con Google Apps Script (${error.message}).`, "error");
+    }
   } finally {
-    setLoading(false);
+    if (!silent) {
+      setLoading(false);
+    }
   }
 }
 
@@ -121,11 +132,12 @@ async function handleCreateRequest(event) {
   dom.createBtn.disabled = true;
 
   try {
-    await postToApi({ action: "create", payload });
+    const created = await postToApi({ action: "create", payload });
+    upsertCreatedRequest(payload, created);
     dom.form.reset();
     resetCimaSelection();
-    showMessage("Solicitud creada correctamente.", "success");
-    await loadRequests();
+    showMessage(`✅ Solicitud creada para "${payload.medicamento || payload.medicamento_normalizado || "medicamento"}".`, "success");
+    renderTable();
   } catch (error) {
     showMessage(`No se pudo crear la solicitud. ${error.message}`, "error");
   } finally {
@@ -150,11 +162,12 @@ async function handleStatusChange(id, estado, selectElement) {
     const target = state.requests.find((item) => String(item.id) === String(id));
     if (target) {
       target.estado = estado;
+      target.updated_at = new Date().toISOString();
       target.fecha_cierre = CLOSED_STATES.has((estado || "").toLowerCase()) ? new Date().toISOString() : "";
     }
 
     selectElement.dataset.previous = estado;
-    showMessage(`Estado actualizado a "${estado}".`, "success");
+    showMessage(`✅ Estado actualizado a "${estado}".`, "success");
     renderTable();
   } catch (error) {
     selectElement.value = previous;
@@ -446,6 +459,7 @@ async function postToApi(body) {
 
 function renderTable() {
   const filtered = applyFilters(state.requests);
+  updateCounters(state.requests);
   dom.tableBody.innerHTML = "";
 
   if (!filtered.length) {
@@ -458,10 +472,14 @@ function renderTable() {
   filtered.forEach((item) => {
     const row = document.createElement("tr");
     const supplyInfo = computeSupplyInfo(item);
+    const urgency = computeUrgency(item.fecha_necesidad);
 
     row.innerHTML = `
       <td>${formatDate(item.created_at)}</td>
-      <td>${formatDate(item.fecha_necesidad, false)}</td>
+      <td>
+        <div>${formatDate(item.fecha_necesidad, false)}</div>
+        <span class="tag ${urgency.css}">${escapeHtml(urgency.label)}</span>
+      </td>
       <td>${escapeHtml(item.medicamento || item.medicamento_normalizado || "-")}</td>
       <td>${escapeHtml(item.presentacion || item.presentacion_normalizada || "-")}</td>
       <td>${escapeHtml(item.area || "-")}</td>
@@ -507,10 +525,34 @@ function applyFilters(requests) {
     const bySearch = !state.filters.search || (item.medicamento || item.medicamento_normalizado || "").toLowerCase().includes(state.filters.search);
     const byArea = !state.filters.area || (item.area || "").toLowerCase().includes(state.filters.area);
     const byFechaNecesidad = !state.filters.fechaNecesidad || normalizeDateOnly(item.fecha_necesidad) === state.filters.fechaNecesidad;
-    const byHistorical = state.filters.showHistorical || !CLOSED_STATES.has(estadoActual);
+    const byHistorical = state.filters.showHistorical || isVisibleInActiveView(item);
 
     return byEstado && byPrioridad && bySearch && byArea && byFechaNecesidad && byHistorical;
   });
+}
+
+function isVisibleInActiveView(item) {
+  const estadoActual = (item.estado || "").toLowerCase();
+  if (estadoActual === "recibido" || estadoActual === "cancelado") return false;
+  if (estadoActual === "pedido" && !isRecentPedido(item)) return false;
+  return !CLOSED_STATES.has(estadoActual) || estadoActual === "pedido";
+}
+
+function isRecentPedido(item) {
+  const reference = new Date(item.updated_at || item.created_at || item.fecha_creacion || 0).getTime();
+  if (!reference) return false;
+  return Date.now() - reference <= 24 * 60 * 60 * 1000;
+}
+
+function updateCounters(requests) {
+  const visible = requests.filter((item) => isVisibleInActiveView(item));
+  const pendiente = visible.filter((item) => (item.estado || "").toLowerCase() === "pendiente").length;
+  const revision = visible.filter((item) => (item.estado || "").toLowerCase() === "en revisión").length;
+  const pedidoReciente = visible.filter((item) => (item.estado || "").toLowerCase() === "pedido" && isRecentPedido(item)).length;
+
+  dom.counterPendiente.textContent = String(pendiente);
+  dom.counterRevision.textContent = String(revision);
+  dom.counterPedidoReciente.textContent = String(pedidoReciente);
 }
 
 function normalizeDateOnly(value) {
@@ -564,6 +606,23 @@ function formatDate(value, withTime = true) {
   return new Intl.DateTimeFormat("es-ES", options).format(date);
 }
 
+function computeUrgency(fechaNecesidad) {
+  const date = new Date(fechaNecesidad);
+  if (Number.isNaN(date.getTime())) {
+    return { label: "Sin fecha válida", css: "urgency-none" };
+  }
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  const days = Math.round((date.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+
+  if (days < 0) return { label: "Vencida", css: "urgency-overdue" };
+  if (days <= 1) return { label: "Urgente", css: "urgency-critical" };
+  if (days <= 3) return { label: "Próxima", css: "urgency-soon" };
+  return { label: "Planificable", css: "urgency-ok" };
+}
+
 function priorityClass(prioridad = "") {
   return `priority-${sanitizeToken(prioridad)}`;
 }
@@ -597,6 +656,27 @@ function showMessage(text, type) {
 function clearMessage() {
   dom.message.textContent = "";
   dom.message.className = "status-banner";
+}
+
+function upsertCreatedRequest(payload, createdResponse) {
+  const fromServer = createdResponse?.data || createdResponse?.item || createdResponse?.payload || {};
+  const newItem = {
+    ...payload,
+    ...fromServer,
+    id: fromServer.id || payload.id || `tmp-${Date.now()}`,
+    created_at: fromServer.created_at || new Date().toISOString(),
+    updated_at: fromServer.updated_at || new Date().toISOString(),
+  };
+
+  state.requests.unshift(newItem);
+}
+
+function setupAutoRefresh() {
+  setInterval(() => {
+    if (!document.hidden) {
+      loadRequests({ silent: true });
+    }
+  }, AUTO_REFRESH_MS);
 }
 
 function escapeHtml(value = "") {
