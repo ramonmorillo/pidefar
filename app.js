@@ -240,30 +240,41 @@ async function handleCreateRequest(event) {
 
 async function handleCreateShortage(event) {
   event.preventDefault();
+  console.log("[shortages] handleCreateShortage: entrada");
+
   if (!state.user.isAdmin) {
-    showMessage("No autorizado: solo el usuario administrador puede guardar incidencias.", "error");
+    const message = "No autorizado: solo el usuario administrador puede guardar incidencias.";
+    console.error("[shortages] handleCreateShortage", message, { user: state.user.name });
+    showMessage(message, "error");
     return;
   }
+
   if (!dom.shortageForm.reportValidity()) return;
 
   const formData = new FormData(dom.shortageForm);
   const payload = Object.fromEntries(formData.entries());
   payload.created_by = state.user.name || "admin";
 
+  const requiredKeys = ["medicamento", "estado", "fecha_inicio", "fecha_fin_prevista", "observaciones", "origen"];
+
   dom.saveShortageBtn.disabled = true;
   try {
-    console.debug("[shortages] create_shortage payload", payload);
-    const created = await postToApi({ action: "create_shortage", payload });
-    console.debug("[shortages] create_shortage response", created);
-    const createdId = created?.id || created?.data?.id || created?.item?.id || created?.payload?.id;
-    if (createdId) {
-      payload.id = createdId;
+    const missingKeys = requiredKeys.filter((key) => !(key in payload));
+    if (missingKeys.length) {
+      throw new Error(`Campos del formulario sin name o fuera del form: ${missingKeys.join(", ")}`);
     }
+    console.log("[shortages] handleCreateShortage: payload", payload);
+    const created = await postToApi({ action: "create_shortage", payload });
+    console.log("[shortages] handleCreateShortage: respuesta backend", created);
+
+    const createdId = created?.id || created?.item?.id || created?.payload?.id || "";
+
+    await loadShortages();
     hideShortageForm();
-    await loadShortages({ silent: true });
-    showMessage("✅ Incidencia de suministro creada.", "success");
+    showMessage(createdId ? `✅ Incidencia de suministro creada (ID: ${createdId}).` : "✅ Incidencia de suministro creada.", "success");
   } catch (error) {
-    showMessage(`No se pudo crear la incidencia. ${error.message}`, "error");
+    console.error("[shortages] handleCreateShortage: error", error);
+    showMessage(`No se pudo crear la incidencia de suministro: ${error.message}`, "error");
   } finally {
     dom.saveShortageBtn.disabled = false;
   }
@@ -579,17 +590,29 @@ function resetCimaSelection() {
 }
 
 async function postToApi(body) {
+  console.log("[api] postToApi: request", body);
+  const requestBody = JSON.stringify(body);
+
   const response = await fetch(API_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(body),
+    body: requestBody,
   });
 
-  if (!response.ok) {
-    throw new Error(`Error HTTP ${response.status}`);
+  const rawText = await response.text();
+  let result = {};
+  try {
+    result = rawText ? JSON.parse(rawText) : {};
+  } catch (error) {
+    console.error("[api] postToApi: respuesta no JSON", rawText);
+    throw new Error("Respuesta no válida del backend (no es JSON)");
   }
 
-  const result = await response.json().catch(() => ({}));
+  console.log("[api] postToApi: response", { status: response.status, ok: response.ok, result });
+
+  if (!response.ok) {
+    throw new Error(result.error || `Error HTTP ${response.status}`);
+  }
 
   if (result.error) {
     throw new Error(result.error);
