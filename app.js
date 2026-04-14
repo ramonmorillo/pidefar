@@ -169,6 +169,7 @@ function onMedicamentoInput(event) {
   state.cima.selected = null;
   renderCimaSelection();
   resetHiddenCimaFields();
+  clearTimeout(state.cima.debounceTimer);
 
   if (query.length < CIMA_CONFIG.minChars) {
     hideSuggestions();
@@ -176,7 +177,6 @@ function onMedicamentoInput(event) {
     return;
   }
 
-  clearTimeout(state.cima.debounceTimer);
   state.cima.debounceTimer = setTimeout(async () => {
     await searchCima(query);
   }, CIMA_CONFIG.debounceMs);
@@ -185,10 +185,12 @@ function onMedicamentoInput(event) {
 async function searchCima(query) {
   const requestId = ++state.cima.requestSeq;
   setCimaLoading(true);
+  console.log("[CIMA] término buscado:", query);
 
   try {
     const rawResults = await fetchCimaSearch(query);
     if (requestId !== state.cima.requestSeq) return;
+    console.log("[CIMA] resultados recibidos:", rawResults);
     const parsed = processCimaResults(rawResults, query);
     renderCimaSuggestions(parsed, query);
   } catch (error) {
@@ -203,18 +205,22 @@ async function searchCima(query) {
 
 async function fetchCimaSearch(query) {
   const endpoint = buildCimaSearchUrl(query);
+  console.log("[CIMA] URL generada:", endpoint);
   const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
   if (!response.ok) {
     throw new Error(`CIMA HTTP ${response.status}`);
   }
-  return response.json();
+
+  const data = await response.json();
+  return data;
 }
 
 function buildCimaSearchUrl(query) {
   const term = String(query || "").trim();
   const url = new URL(CIMA_CONFIG.searchUrl);
   if (term.length >= CIMA_CONFIG.minChars) {
-    url.searchParams.set("q", term);
+    // CIMA REST usa "nombre" como parámetro de búsqueda principal de medicamentos.
+    url.searchParams.set("nombre", term);
   }
   return url.toString();
 }
@@ -224,7 +230,8 @@ function parseCimaSearchResults(rawResults) {
     ? rawResults
     : rawResults?.resultados || rawResults?.result || rawResults?.medicamentos || rawResults?.items || [];
 
-  return base.map((item) => {
+  return base
+    .map((item) => {
     const cn = item.cn || item.CN || item.codigo_nacional || item.nregistro || "";
     const nombre = item.nombre || item.nombrecomercial || item.nombre_cima || item.descripcion || "";
     const presentacion = item.presentacion || item.nomPresentacion || item.forma || "";
@@ -237,7 +244,8 @@ function parseCimaSearchResults(rawResults) {
       presentacion_normalizada: String(presentacion || "").trim(),
       label: [nombre, presentacion].filter(Boolean).join(" · "),
     };
-  }).filter((entry) => entry.label);
+    })
+    .filter((entry) => entry.label);
 }
 
 function dedupeCimaOptions(options) {
@@ -286,10 +294,13 @@ function processCimaResults(rawResults, query) {
     }
   });
 
-  return [...startsWith, ...contains].slice(0, CIMA_CONFIG.maxSuggestions);
+  return [...startsWith, ...contains]
+    .filter((option) => normalizeSearchText(option.label).includes(normalizedQuery))
+    .slice(0, CIMA_CONFIG.maxSuggestions);
 }
 
 function renderCimaSuggestions(options, query) {
+  // Limpia resultados previos para evitar mezclar sugerencias de búsquedas antiguas.
   dom.cimaSuggestions.innerHTML = "";
 
   if (!options.length) {
@@ -328,7 +339,7 @@ function hideSuggestions() {
 async function selectCimaOption(option) {
   state.cima.selected = option;
   dom.medicamentoInput.value = option.nombre_cima || option.medicamento_normalizado;
-  dom.presentacionInput.value = option.presentacion_normalizada || dom.presentacionInput.value;
+  dom.presentacionInput.value = option.presentacion_normalizada || "";
 
   fillHiddenCimaFields(option);
   hideSuggestions();
