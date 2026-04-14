@@ -1,4 +1,4 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbzAlOG7qVWiqAV4NhNbSKpFjnqN4bcLVNeKOg6hhleZ4ekhzN8ldS-jF7uDYLY6ARenXg/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbzJZLvQqJKNBU-b96BWgwoJpoz4HrP8T_0ScwbfIpyPJ5P5OI6rqzx8vb1olnYz2oZsMg/exec";
 const ADMIN_NAME = "RAMON";
 
 const CIMA_CONFIG = {
