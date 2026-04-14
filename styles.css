@@ -36,6 +36,28 @@ body {
   margin-bottom: 1rem;
 }
 
+.tabs-nav {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.tab-btn {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  padding: 0.45rem 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  color: #fff;
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
 .eyebrow {
   margin: 0;
   color: var(--muted);
@@ -331,6 +353,16 @@ th {
   background: #fee2e2;
 }
 
+.shortage-activo {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.shortage-resuelto {
+  color: #166534;
+  background: #dcfce7;
+}
+
 .urgency-overdue {
   color: #991b1b;
   background: #fee2e2;
@@ -366,9 +398,29 @@ th {
   background: #fee2e2;
 }
 
+.shortage-alert {
+  margin-top: 0.3rem;
+  color: #991b1b;
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+
 .status-select {
   width: 145px;
   min-width: 145px;
+}
+
+.shortage-status-select {
+  width: 120px;
+}
+
+.shortage-grid {
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
+.muted-inline {
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .suggestions {
@@ -418,6 +470,10 @@ th {
   .form-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  .shortage-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 680px) {
@@ -428,6 +484,14 @@ th {
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .tabs-nav {
+    flex-wrap: wrap;
+  }
+
+  .tab-btn {
+    width: 100%;
   }
 
   .filters {
