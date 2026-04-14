@@ -1,9 +1,12 @@
 const STATUS_OPTIONS = ["Pendiente", "En revisión", "Pedido", "Recibido", "Cancelado", "No necesario"];
+const SHORTAGE_STATUS_OPTIONS = ["activo", "resuelto"];
 const CLOSED_STATES = new Set(["recibido", "cancelado", "no necesario"]);
 const AUTO_REFRESH_MS = 60000;
 
 const state = {
+  activeTab: "solicitudes",
   requests: [],
+  shortages: [],
   filters: {
     estado: "",
     prioridad: "",
@@ -16,6 +19,10 @@ const state = {
     debounceTimer: null,
     selected: null,
     requestSeq: 0,
+  },
+  user: {
+    name: "",
+    isAdmin: false,
   },
 };
 
@@ -42,17 +49,29 @@ const dom = {
   counterPendiente: document.getElementById("counterPendiente"),
   counterRevision: document.getElementById("counterRevision"),
   counterPedidoReciente: document.getElementById("counterPedidoReciente"),
+  tabSolicitudes: document.getElementById("tabSolicitudes"),
+  tabShortages: document.getElementById("tabShortages"),
+  viewSolicitudes: document.getElementById("viewSolicitudes"),
+  viewShortages: document.getElementById("viewShortages"),
+  addShortageBtn: document.getElementById("addShortageBtn"),
+  shortageForm: document.getElementById("shortageForm"),
+  saveShortageBtn: document.getElementById("saveShortageBtn"),
+  cancelShortageBtn: document.getElementById("cancelShortageBtn"),
+  shortagesTableBody: document.getElementById("shortagesTableBody"),
+  shortagesEmptyState: document.getElementById("shortagesEmptyState"),
+  shortageMedicamentoInput: document.getElementById("shortageMedicamentoInput"),
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
-  loadRequests();
+  await loadAllData();
   setupAutoRefresh();
 });
 
 function bindEvents() {
   dom.form.addEventListener("submit", handleCreateRequest);
-  dom.refreshBtn.addEventListener("click", loadRequests);
+  dom.refreshBtn.addEventListener("click", () => loadAllData());
+  dom.form.elements.created_by.addEventListener("input", handleIdentityChange);
 
   dom.filterEstado.addEventListener("change", (event) => {
     state.filters.estado = event.target.value;
@@ -85,10 +104,56 @@ function bindEvents() {
   });
 
   dom.medicamentoInput.addEventListener("input", onMedicamentoInput);
-
   dom.medicamentoInput.addEventListener("blur", () => {
     setTimeout(() => hideSuggestions(), 120);
   });
+
+  dom.tabSolicitudes.addEventListener("click", () => setActiveTab("solicitudes"));
+  dom.tabShortages.addEventListener("click", () => setActiveTab("shortages"));
+
+  dom.addShortageBtn.addEventListener("click", showShortageForm);
+  dom.cancelShortageBtn.addEventListener("click", hideShortageForm);
+  dom.shortageForm.addEventListener("submit", handleCreateShortage);
+}
+
+async function loadAllData({ silent = false } = {}) {
+  await Promise.all([loadRequests({ silent }), loadShortages({ silent })]);
+}
+
+function handleIdentityChange(event) {
+  state.user.name = event.target.value.trim();
+  state.user.isAdmin = normalizeSearchText(state.user.name) === normalizeSearchText(ADMIN_NAME || "");
+  renderAdminControls();
+  renderShortagesTable();
+}
+
+function renderAdminControls() {
+  const shouldShow = state.user.isAdmin;
+  dom.addShortageBtn.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow) {
+    hideShortageForm();
+  }
+}
+
+function showShortageForm() {
+  if (!state.user.isAdmin) return;
+  dom.shortageForm.classList.remove("hidden");
+  dom.shortageMedicamentoInput.value = dom.medicamentoInput.value.trim();
+}
+
+function hideShortageForm() {
+  dom.shortageForm.classList.add("hidden");
+  dom.shortageForm.reset();
+}
+
+function setActiveTab(tabName) {
+  state.activeTab = tabName;
+  const isSolicitudes = tabName === "solicitudes";
+
+  dom.tabSolicitudes.classList.toggle("active", isSolicitudes);
+  dom.tabShortages.classList.toggle("active", !isSolicitudes);
+  dom.viewSolicitudes.classList.toggle("active", isSolicitudes);
+  dom.viewShortages.classList.toggle("active", !isSolicitudes);
 }
 
 async function loadRequests({ silent = false } = {}) {
@@ -102,9 +167,7 @@ async function loadRequests({ silent = false } = {}) {
     if (!response.ok) throw new Error(`Error HTTP ${response.status}`);
 
     const data = await response.json();
-    const list = normalizeList(data).sort(
-      (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
-    );
+    const list = normalizeList(data).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 
     state.requests = list;
     populateEstadoFilter(list);
@@ -116,6 +179,21 @@ async function loadRequests({ silent = false } = {}) {
   } finally {
     if (!silent) {
       setLoading(false);
+    }
+  }
+}
+
+async function loadShortages({ silent = false } = {}) {
+  try {
+    const response = await fetch(`${API_URL}?action=list_shortages`);
+    if (!response.ok) throw new Error(`Error HTTP ${response.status}`);
+    const data = await response.json();
+    state.shortages = normalizeList(data).sort((a, b) => new Date(b.fecha_inicio || 0) - new Date(a.fecha_inicio || 0));
+    renderShortagesTable();
+    renderTable();
+  } catch (error) {
+    if (!silent) {
+      showMessage(`No se pudieron cargar incidencias de suministro (${error.message}).`, "error");
     }
   }
 }
@@ -142,6 +220,35 @@ async function handleCreateRequest(event) {
     showMessage(`No se pudo crear la solicitud. ${error.message}`, "error");
   } finally {
     dom.createBtn.disabled = false;
+  }
+}
+
+async function handleCreateShortage(event) {
+  event.preventDefault();
+  if (!state.user.isAdmin) return;
+  if (!dom.shortageForm.reportValidity()) return;
+
+  const formData = new FormData(dom.shortageForm);
+  const payload = Object.fromEntries(formData.entries());
+  payload.created_by = state.user.name || "admin";
+
+  dom.saveShortageBtn.disabled = true;
+  try {
+    const created = await postToApi({ action: "create_shortage", payload });
+    const fromServer = created?.data || created?.item || created?.payload || {};
+    state.shortages.unshift({
+      ...payload,
+      ...fromServer,
+      id: fromServer.id || `short-${Date.now()}`,
+    });
+    hideShortageForm();
+    renderShortagesTable();
+    renderTable();
+    showMessage("✅ Incidencia de suministro creada.", "success");
+  } catch (error) {
+    showMessage(`No se pudo crear la incidencia. ${error.message}`, "error");
+  } finally {
+    dom.saveShortageBtn.disabled = false;
   }
 }
 
@@ -177,6 +284,35 @@ async function handleStatusChange(id, estado, selectElement) {
   }
 }
 
+async function handleShortageStatusChange(id, estado, selectElement) {
+  const previous = selectElement.dataset.previous || "";
+  selectElement.disabled = true;
+
+  try {
+    await postToApi({
+      action: "update_shortage",
+      payload: {
+        id,
+        estado,
+        updated_by: state.user.name || "admin",
+      },
+    });
+
+    const target = state.shortages.find((item) => String(item.id) === String(id));
+    if (target) target.estado = estado;
+
+    selectElement.dataset.previous = estado;
+    renderShortagesTable();
+    renderTable();
+    showMessage(`✅ Incidencia marcada como "${estado}".`, "success");
+  } catch (error) {
+    selectElement.value = previous;
+    showMessage(`No se pudo actualizar incidencia: ${error.message}`, "error");
+  } finally {
+    selectElement.disabled = false;
+  }
+}
+
 function onMedicamentoInput(event) {
   const query = event.target.value.trim();
   state.cima.selected = null;
@@ -198,17 +334,13 @@ function onMedicamentoInput(event) {
 async function searchCima(query) {
   const requestId = ++state.cima.requestSeq;
   setCimaLoading(true);
-  console.log("[CIMA] término buscado:", query);
 
   try {
     const rawResults = await fetchCimaSearch(query);
     if (requestId !== state.cima.requestSeq) return;
-    console.log("[CIMA] resultados recibidos:", rawResults);
     const parsed = processCimaResults(rawResults, query);
     renderCimaSuggestions(parsed, query);
   } catch (error) {
-    // Nota: CIMA puede limitar peticiones CORS desde frontend puro según endpoint/entorno.
-    // Por diseño la app sigue en modo manual aunque esta integración falle.
     hideSuggestions();
     showMessage(`Búsqueda CIMA no disponible (${error.message}). Puedes continuar en modo manual.`, "error");
   } finally {
@@ -218,7 +350,6 @@ async function searchCima(query) {
 
 async function fetchCimaSearch(query) {
   const endpoint = buildCimaSearchUrl(query);
-  console.log("[CIMA] URL generada:", endpoint);
   const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
   if (!response.ok) {
     throw new Error(`CIMA HTTP ${response.status}`);
@@ -232,7 +363,6 @@ function buildCimaSearchUrl(query) {
   const term = String(query || "").trim();
   const url = new URL(CIMA_CONFIG.searchUrl);
   if (term.length >= CIMA_CONFIG.minChars) {
-    // CIMA REST usa "nombre" como parámetro de búsqueda principal de medicamentos.
     url.searchParams.set("nombre", term);
   }
   return url.toString();
@@ -245,18 +375,18 @@ function parseCimaSearchResults(rawResults) {
 
   return base
     .map((item) => {
-    const cn = item.cn || item.CN || item.codigo_nacional || item.nregistro || "";
-    const nombre = item.nombre || item.nombrecomercial || item.nombre_cima || item.descripcion || "";
-    const presentacion = item.presentacion || item.nomPresentacion || item.forma || "";
+      const cn = item.cn || item.CN || item.codigo_nacional || item.nregistro || "";
+      const nombre = item.nombre || item.nombrecomercial || item.nombre_cima || item.descripcion || "";
+      const presentacion = item.presentacion || item.nomPresentacion || item.forma || "";
 
-    return {
-      id: `${cn}-${nombre}-${presentacion}`,
-      cn: String(cn || ""),
-      nombre_cima: String(nombre || "").trim(),
-      medicamento_normalizado: String(item.principioActivo || item.medicamento || nombre || "").trim(),
-      presentacion_normalizada: String(presentacion || "").trim(),
-      label: [nombre, presentacion].filter(Boolean).join(" · "),
-    };
+      return {
+        id: `${cn}-${nombre}-${presentacion}`,
+        cn: String(cn || ""),
+        nombre_cima: String(nombre || "").trim(),
+        medicamento_normalizado: String(item.principioActivo || item.medicamento || nombre || "").trim(),
+        presentacion_normalizada: String(presentacion || "").trim(),
+        label: [nombre, presentacion].filter(Boolean).join(" · "),
+      };
     })
     .filter((entry) => entry.label);
 }
@@ -288,12 +418,7 @@ function processCimaResults(rawResults, query) {
   const contains = [];
 
   deduped.forEach((option) => {
-    const haystacks = [
-      option.nombre_cima,
-      option.medicamento_normalizado,
-      option.presentacion_normalizada,
-      option.label,
-    ]
+    const haystacks = [option.nombre_cima, option.medicamento_normalizado, option.presentacion_normalizada, option.label]
       .map(normalizeSearchText)
       .filter(Boolean);
 
@@ -313,7 +438,6 @@ function processCimaResults(rawResults, query) {
 }
 
 function renderCimaSuggestions(options, query) {
-  // Limpia resultados previos para evitar mezclar sugerencias de búsquedas antiguas.
   dom.cimaSuggestions.innerHTML = "";
 
   if (!options.length) {
@@ -472,6 +596,7 @@ function renderTable() {
   filtered.forEach((item) => {
     const row = document.createElement("tr");
     const supplyInfo = computeSupplyInfo(item);
+    const shortageAlert = getShortageAlert(item);
     const urgency = computeUrgency(item.fecha_necesidad);
 
     row.innerHTML = `
@@ -487,7 +612,10 @@ function renderTable() {
       <td><span class="tag ${priorityClass(item.prioridad)}">${escapeHtml(item.prioridad || "-")}</span></td>
       <td><span class="tag ${stateClass(item.estado)}">${escapeHtml(item.estado || "Pendiente")}</span></td>
       <td>${escapeHtml(item.observaciones || "-")}</td>
-      <td><span class="tag ${supplyInfo.css}" title="${escapeHtml(supplyInfo.note || "")}">${escapeHtml(supplyInfo.label)}</span></td>
+      <td>
+        <span class="tag ${supplyInfo.css}" title="${escapeHtml(supplyInfo.note || "")}">${escapeHtml(supplyInfo.label)}</span>
+        ${shortageAlert ? `<div class="tag shortage-linked" title="${escapeHtml(shortageAlert.note)}">Problema de suministro</div>` : ""}
+      </td>
       <td>
         <select class="status-select" data-id="${escapeHtml(String(item.id || ""))}">
           ${STATUS_OPTIONS.map((status) => `<option value="${status}" ${status === (item.estado || "Pendiente") ? "selected" : ""}>${status}</option>`).join("")}
@@ -506,6 +634,63 @@ function renderTable() {
   });
 }
 
+function renderShortagesTable() {
+  dom.shortagesTableBody.innerHTML = "";
+
+  if (!state.shortages.length) {
+    dom.shortagesEmptyState.classList.remove("hidden");
+    return;
+  }
+
+  dom.shortagesEmptyState.classList.add("hidden");
+
+  state.shortages.forEach((item) => {
+    const row = document.createElement("tr");
+    const statusValue = (item.estado || "activo").toLowerCase();
+    row.innerHTML = `
+      <td>${escapeHtml(item.medicamento || "-")}</td>
+      <td><span class="tag shortage-${sanitizeToken(statusValue)}">${escapeHtml(statusValue)}</span></td>
+      <td>${formatDate(item.fecha_inicio, false)}</td>
+      <td>${formatDate(item.fecha_fin_prevista, false)}</td>
+      <td>${escapeHtml(item.observaciones || "-")}</td>
+      <td>${escapeHtml(item.origen || "-")}</td>
+      <td>
+        ${state.user.isAdmin
+          ? `<select class="shortage-status-select" data-id="${escapeHtml(String(item.id || ""))}">
+              ${SHORTAGE_STATUS_OPTIONS.map(
+                (status) => `<option value="${status}" ${status === statusValue ? "selected" : ""}>${status}</option>`
+              ).join("")}
+            </select>`
+          : "-"}
+      </td>
+    `;
+
+    if (state.user.isAdmin) {
+      const selector = row.querySelector(".shortage-status-select");
+      selector.dataset.previous = statusValue;
+      selector.addEventListener("change", (event) => {
+        handleShortageStatusChange(item.id, event.target.value, event.target);
+      });
+    }
+
+    dom.shortagesTableBody.appendChild(row);
+  });
+}
+
+function getShortageAlert(item) {
+  const medicamento = normalizeSearchText(item.medicamento || item.medicamento_normalizado || "");
+  if (!medicamento) return null;
+
+  const activeShortage = state.shortages.find((shortage) => {
+    const shortageMed = normalizeSearchText(shortage.medicamento || "");
+    const isActive = normalizeSearchText(shortage.estado || "activo") === "activo";
+    return isActive && shortageMed && (medicamento.includes(shortageMed) || shortageMed.includes(medicamento));
+  });
+
+  if (!activeShortage) return null;
+  return { note: activeShortage.observaciones || "Incidencia activa" };
+}
+
 function computeSupplyInfo(item) {
   const raw = String(item.tiene_psuministro || "").toLowerCase();
   const hasIssue = raw === "sí" || raw === "si" || raw === "true" || raw === "1";
@@ -522,7 +707,8 @@ function applyFilters(requests) {
     const estadoActual = (item.estado || "").toLowerCase();
     const byEstado = !state.filters.estado || estadoActual === state.filters.estado.toLowerCase();
     const byPrioridad = !state.filters.prioridad || (item.prioridad || "").toLowerCase() === state.filters.prioridad.toLowerCase();
-    const bySearch = !state.filters.search || (item.medicamento || item.medicamento_normalizado || "").toLowerCase().includes(state.filters.search);
+    const bySearch =
+      !state.filters.search || (item.medicamento || item.medicamento_normalizado || "").toLowerCase().includes(state.filters.search);
     const byArea = !state.filters.area || (item.area || "").toLowerCase().includes(state.filters.area);
     const byFechaNecesidad = !state.filters.fechaNecesidad || normalizeDateOnly(item.fecha_necesidad) === state.filters.fechaNecesidad;
     const byHistorical = state.filters.showHistorical || isVisibleInActiveView(item);
@@ -632,12 +818,14 @@ function stateClass(status = "") {
 }
 
 function sanitizeToken(value = "") {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "none";
+  return (
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "none"
+  );
 }
 
 function setLoading(isLoading) {
@@ -674,7 +862,7 @@ function upsertCreatedRequest(payload, createdResponse) {
 function setupAutoRefresh() {
   setInterval(() => {
     if (!document.hidden) {
-      loadRequests({ silent: true });
+      loadAllData({ silent: true });
     }
   }, AUTO_REFRESH_MS);
 }
