@@ -17,133 +17,205 @@
         <button id="refreshBtn" class="btn btn-secondary" type="button">Actualizar</button>
       </header>
 
-      <main class="grid-layout">
-        <section class="card form-card">
-          <h2>Nueva solicitud</h2>
-          <form id="requestForm" novalidate>
-            <div class="form-grid">
+      <nav class="tabs" aria-label="Vistas de la aplicación">
+        <button id="tabSolicitudes" class="tab-btn active" type="button" data-tab="solicitudes">Solicitudes</button>
+        <button id="tabShortages" class="tab-btn" type="button" data-tab="shortages">Problemas de suministro</button>
+      </nav>
+
+      <section id="viewSolicitudes" class="tab-view active">
+        <main class="grid-layout">
+          <section class="card form-card">
+            <h2>Nueva solicitud</h2>
+            <form id="requestForm" novalidate>
+              <div class="form-grid">
+                <label>
+                  Solicitante
+                  <input type="text" name="created_by" required />
+                </label>
+                <label>
+                  Área
+                  <input type="text" name="area" required />
+                </label>
+                <label class="medicamento-field">
+                  Medicamento
+                  <input id="medicamentoInput" type="text" name="medicamento" autocomplete="off" required />
+                  <div id="cimaLoading" class="input-hint hidden">Buscando en CIMA…</div>
+                  <ul id="cimaSuggestions" class="suggestions hidden" role="listbox" aria-label="Sugerencias de CIMA"></ul>
+                </label>
+                <input id="presentacionInput" type="hidden" name="presentacion" />
+                <label>
+                  Fecha de necesidad
+                  <input type="date" name="fecha_necesidad" required />
+                </label>
+                <label>
+                  Cantidad
+                  <input type="text" name="cantidad" required />
+                </label>
+                <label>
+                  Prioridad
+                  <select name="prioridad" required>
+                    <option value="">Selecciona prioridad</option>
+                    <option value="Baja">Baja</option>
+                    <option value="Media">Media</option>
+                    <option value="Alta">Alta</option>
+                    <option value="Urgente">Urgente</option>
+                  </select>
+                </label>
+              </div>
+
               <label>
-                Solicitante
-                <input type="text" name="created_by" required />
+                Observaciones
+                <textarea name="observaciones" rows="3"></textarea>
               </label>
-              <label>
-                Área
-                <input type="text" name="area" required />
-              </label>
-              <label class="medicamento-field">
-                Medicamento
-                <input id="medicamentoInput" type="text" name="medicamento" autocomplete="off" required />
-                <div id="cimaLoading" class="input-hint hidden">Buscando en CIMA…</div>
-                <ul id="cimaSuggestions" class="suggestions hidden" role="listbox" aria-label="Sugerencias de CIMA"></ul>
-              </label>
-              <input id="presentacionInput" type="hidden" name="presentacion" />
-              <label>
-                Fecha de necesidad
-                <input type="date" name="fecha_necesidad" required />
-              </label>
-              <label>
-                Cantidad
-                <input type="text" name="cantidad" required />
-              </label>
-              <label>
-                Prioridad
-                <select name="prioridad" required>
-                  <option value="">Selecciona prioridad</option>
+
+              <div id="cimaSelection" class="selection-box hidden"></div>
+              <div id="supplyFeedback" class="selection-box hidden"></div>
+
+              <input type="hidden" name="medicamento_normalizado" />
+              <input type="hidden" name="presentacion_normalizada" />
+              <input type="hidden" name="cn" />
+              <input type="hidden" name="nombre_cima" />
+              <input type="hidden" name="tiene_psuministro" />
+              <input type="hidden" name="observ_psuministro" />
+
+              <div class="actions-row">
+                <button id="createBtn" class="btn btn-primary" type="submit">Crear solicitud</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="card list-card">
+            <div class="section-head">
+              <h2>Listado de solicitudes</h2>
+              <div class="filters">
+                <select id="filterEstado">
+                  <option value="">Todos los estados</option>
+                </select>
+                <select id="filterPrioridad">
+                  <option value="">Todas las prioridades</option>
                   <option value="Baja">Baja</option>
                   <option value="Media">Media</option>
                   <option value="Alta">Alta</option>
                   <option value="Urgente">Urgente</option>
                 </select>
+                <input id="filterArea" type="search" placeholder="Filtrar área..." />
+                <input id="filterFechaNecesidad" type="date" />
+                <input id="searchMedicamento" type="search" placeholder="Buscar medicamento..." />
+                <label class="toggle-inline">
+                  <input id="showHistorical" type="checkbox" />
+                  Mostrar histórico / cerrados
+                </label>
+              </div>
+            </div>
+            <div id="statusCounters" class="counters-row">
+              <article class="counter-card">
+                <p class="counter-title">Pendientes</p>
+                <p id="counterPendiente" class="counter-value">0</p>
+              </article>
+              <article class="counter-card">
+                <p class="counter-title">En revisión</p>
+                <p id="counterRevision" class="counter-value">0</p>
+              </article>
+              <article class="counter-card">
+                <p class="counter-title">Pedido reciente</p>
+                <p id="counterPedidoReciente" class="counter-value">0</p>
+              </article>
+            </div>
+
+            <div id="statusMessage" class="status-banner" aria-live="polite"></div>
+
+            <div id="loadingState" class="loading hidden">Cargando solicitudes…</div>
+
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha creación</th>
+                    <th>Fecha necesidad</th>
+                    <th>Medicamento</th>
+                    <th>Presentación</th>
+                    <th>Área</th>
+                    <th>Solicitante</th>
+                    <th>Prioridad</th>
+                    <th>Estado</th>
+                    <th>Observaciones</th>
+                    <th>Alerta suministro</th>
+                    <th>Gestión</th>
+                  </tr>
+                </thead>
+                <tbody id="requestsTableBody"></tbody>
+              </table>
+            </div>
+
+            <p id="emptyState" class="empty-state hidden">No hay solicitudes con los filtros actuales.</p>
+          </section>
+        </main>
+      </section>
+
+      <section id="viewShortages" class="tab-view">
+        <main class="single-column-layout">
+          <section class="card list-card">
+            <div class="section-head">
+              <h2>Problemas de suministro</h2>
+              <button id="addShortageBtn" class="btn btn-primary hidden" type="button">Añadir incidencia</button>
+            </div>
+
+            <form id="shortageForm" class="shortage-form hidden" novalidate>
+              <div class="form-grid two-cols">
+                <label class="medicamento-field">
+                  Medicamento
+                  <input id="shortageMedicamentoInput" type="text" name="medicamento" autocomplete="off" required />
+                </label>
+                <label>
+                  Estado
+                  <select name="estado" required>
+                    <option value="activo">activo</option>
+                    <option value="resuelto">resuelto</option>
+                  </select>
+                </label>
+                <label>
+                  Fecha inicio
+                  <input type="date" name="fecha_inicio" required />
+                </label>
+                <label>
+                  Fecha fin prevista
+                  <input type="date" name="fecha_fin_prevista" />
+                </label>
+                <label>
+                  Origen
+                  <input type="text" name="origen" />
+                </label>
+              </div>
+              <label>
+                Observaciones
+                <textarea name="observaciones" rows="3"></textarea>
               </label>
+              <div class="actions-row">
+                <button id="saveShortageBtn" class="btn btn-primary" type="submit">Guardar incidencia</button>
+                <button id="cancelShortageBtn" class="btn btn-secondary" type="button">Cancelar</button>
+              </div>
+            </form>
+
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Medicamento</th>
+                    <th>Estado</th>
+                    <th>Fecha inicio</th>
+                    <th>Fecha fin prevista</th>
+                    <th>Observaciones</th>
+                    <th>Origen</th>
+                    <th>Gestión</th>
+                  </tr>
+                </thead>
+                <tbody id="shortagesTableBody"></tbody>
+              </table>
             </div>
-
-            <label>
-              Observaciones
-              <textarea name="observaciones" rows="3"></textarea>
-            </label>
-
-            <div id="cimaSelection" class="selection-box hidden"></div>
-            <div id="supplyFeedback" class="selection-box hidden"></div>
-
-            <input type="hidden" name="medicamento_normalizado" />
-            <input type="hidden" name="presentacion_normalizada" />
-            <input type="hidden" name="cn" />
-            <input type="hidden" name="nombre_cima" />
-            <input type="hidden" name="tiene_psuministro" />
-            <input type="hidden" name="observ_psuministro" />
-
-            <div class="actions-row">
-              <button id="createBtn" class="btn btn-primary" type="submit">Crear solicitud</button>
-            </div>
-          </form>
-        </section>
-
-        <section class="card list-card">
-          <div class="section-head">
-            <h2>Listado de solicitudes</h2>
-            <div class="filters">
-              <select id="filterEstado">
-                <option value="">Todos los estados</option>
-              </select>
-              <select id="filterPrioridad">
-                <option value="">Todas las prioridades</option>
-                <option value="Baja">Baja</option>
-                <option value="Media">Media</option>
-                <option value="Alta">Alta</option>
-                <option value="Urgente">Urgente</option>
-              </select>
-              <input id="filterArea" type="search" placeholder="Filtrar área..." />
-              <input id="filterFechaNecesidad" type="date" />
-              <input id="searchMedicamento" type="search" placeholder="Buscar medicamento..." />
-              <label class="toggle-inline">
-                <input id="showHistorical" type="checkbox" />
-                Mostrar histórico / cerrados
-              </label>
-            </div>
-          </div>
-          <div id="statusCounters" class="counters-row">
-            <article class="counter-card">
-              <p class="counter-title">Pendientes</p>
-              <p id="counterPendiente" class="counter-value">0</p>
-            </article>
-            <article class="counter-card">
-              <p class="counter-title">En revisión</p>
-              <p id="counterRevision" class="counter-value">0</p>
-            </article>
-            <article class="counter-card">
-              <p class="counter-title">Pedido reciente</p>
-              <p id="counterPedidoReciente" class="counter-value">0</p>
-            </article>
-          </div>
-
-          <div id="statusMessage" class="status-banner" aria-live="polite"></div>
-
-          <div id="loadingState" class="loading hidden">Cargando solicitudes…</div>
-
-          <div class="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Fecha creación</th>
-                  <th>Fecha necesidad</th>
-                  <th>Medicamento</th>
-                  <th>Presentación</th>
-                  <th>Área</th>
-                  <th>Solicitante</th>
-                  <th>Prioridad</th>
-                  <th>Estado</th>
-                  <th>Observaciones</th>
-                  <th>Alerta suministro</th>
-                  <th>Gestión</th>
-                </tr>
-              </thead>
-              <tbody id="requestsTableBody"></tbody>
-            </table>
-          </div>
-
-          <p id="emptyState" class="empty-state hidden">No hay solicitudes con los filtros actuales.</p>
-        </section>
-      </main>
+            <p id="shortagesEmptyState" class="empty-state hidden">No hay incidencias registradas.</p>
+          </section>
+        </main>
+      </section>
     </div>
 
     <script src="config.js"></script>
