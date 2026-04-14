@@ -18,24 +18,30 @@
 
       <main class="grid-layout">
         <section class="card form-card">
-          <h2>Crear solicitud</h2>
+          <h2>Nueva solicitud</h2>
           <form id="requestForm" novalidate>
             <div class="form-grid">
               <label>
-                Solicitante (created_by)
+                Solicitante
                 <input type="text" name="created_by" required />
               </label>
               <label>
                 Área
                 <input type="text" name="area" required />
               </label>
-              <label>
+              <label class="medicamento-field">
                 Medicamento
-                <input type="text" name="medicamento" required />
+                <input id="medicamentoInput" type="text" name="medicamento" autocomplete="off" required />
+                <div id="cimaLoading" class="input-hint hidden">Buscando en CIMA…</div>
+                <ul id="cimaSuggestions" class="suggestions hidden" role="listbox" aria-label="Sugerencias de CIMA"></ul>
               </label>
               <label>
                 Presentación
-                <input type="text" name="presentacion" required />
+                <input id="presentacionInput" type="text" name="presentacion" required />
+              </label>
+              <label>
+                Fecha de necesidad
+                <input type="date" name="fecha_necesidad" required />
               </label>
               <label>
                 Cantidad
@@ -52,7 +58,7 @@
                 </select>
               </label>
               <label>
-                Motivo
+                Motivo clínico / operativo
                 <input type="text" name="motivo" required />
               </label>
             </div>
@@ -61,6 +67,16 @@
               Observaciones
               <textarea name="observaciones" rows="3"></textarea>
             </label>
+
+            <div id="cimaSelection" class="selection-box hidden"></div>
+            <div id="supplyFeedback" class="selection-box hidden"></div>
+
+            <input type="hidden" name="medicamento_normalizado" />
+            <input type="hidden" name="presentacion_normalizada" />
+            <input type="hidden" name="cn" />
+            <input type="hidden" name="nombre_cima" />
+            <input type="hidden" name="tiene_psuministro" />
+            <input type="hidden" name="observ_psuministro" />
 
             <div class="actions-row">
               <button id="createBtn" class="btn btn-primary" type="submit">Crear solicitud</button>
@@ -82,7 +98,13 @@
                 <option value="Alta">Alta</option>
                 <option value="Urgente">Urgente</option>
               </select>
+              <input id="filterArea" type="search" placeholder="Filtrar área..." />
+              <input id="filterFechaNecesidad" type="date" />
               <input id="searchMedicamento" type="search" placeholder="Buscar medicamento..." />
+              <label class="toggle-inline">
+                <input id="showHistorical" type="checkbox" />
+                Mostrar histórico / cerrados
+              </label>
             </div>
           </div>
 
@@ -94,13 +116,16 @@
             <table>
               <thead>
                 <tr>
-                  <th>Fecha</th>
+                  <th>Fecha creación</th>
+                  <th>Fecha necesidad</th>
                   <th>Medicamento</th>
+                  <th>Presentación</th>
                   <th>Área</th>
                   <th>Solicitante</th>
                   <th>Prioridad</th>
                   <th>Estado</th>
                   <th>Observaciones</th>
+                  <th>Alerta suministro</th>
                   <th>Gestión</th>
                 </tr>
               </thead>
