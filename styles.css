@@ -341,6 +341,15 @@ th {
   color: var(--muted);
 }
 
+.suggestions li.empty {
+  cursor: default;
+  color: var(--muted);
+}
+
+.suggestions li.empty:hover {
+  background: transparent;
+}
+
 @media (max-width: 1024px) {
   .grid-layout {
     grid-template-columns: 1fr;
