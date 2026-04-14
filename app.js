@@ -4,6 +4,7 @@ const CLOSED_STATES = new Set(["recibido", "cancelado", "no necesario"]);
 const AUTO_REFRESH_MS = 60000;
 const APP_CONFIG = window.APP_CONFIG || {};
 const RESOLVED_ADMIN_NAME = String(APP_CONFIG.ADMIN_NAME || (typeof ADMIN_NAME !== "undefined" ? ADMIN_NAME : "")).trim();
+console.log("API_URL:", API_URL);
 
 const state = {
   activeTab: "solicitudes",
