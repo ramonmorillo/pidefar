@@ -17,7 +17,12 @@
         <button id="refreshBtn" class="btn btn-secondary" type="button">Actualizar</button>
       </header>
 
-      <main class="grid-layout">
+      <nav class="tabs-nav" aria-label="Navegación principal">
+        <button id="tabSolicitudes" class="tab-btn active" type="button" data-view="solicitudes">Solicitudes</button>
+        <button id="tabShortages" class="tab-btn" type="button" data-view="shortages">Problemas de suministro</button>
+      </nav>
+
+      <main id="viewSolicitudes" class="grid-layout">
         <section class="card form-card">
           <h2>Nueva solicitud</h2>
           <form id="requestForm" novalidate>
@@ -144,6 +149,68 @@
           <p id="emptyState" class="empty-state hidden">No hay solicitudes con los filtros actuales.</p>
         </section>
       </main>
+
+      <section id="viewShortages" class="card hidden">
+        <div class="section-head">
+          <h2>Problemas de suministro</h2>
+          <button id="addShortageBtn" class="btn btn-primary hidden" type="button">Añadir incidencia</button>
+        </div>
+
+        <form id="shortageForm" class="hidden" novalidate>
+          <div class="form-grid shortage-grid">
+            <label class="medicamento-field">
+              Medicamento
+              <input id="shortageMedicamentoInput" type="text" name="medicamento" autocomplete="off" required />
+            </label>
+            <label>
+              Estado
+              <select name="estado" required>
+                <option value="activo">activo</option>
+                <option value="resuelto">resuelto</option>
+              </select>
+            </label>
+            <label>
+              Fecha inicio
+              <input type="date" name="fecha_inicio" required />
+            </label>
+            <label>
+              Fecha fin prevista
+              <input type="date" name="fecha_fin_prevista" />
+            </label>
+            <label>
+              Origen
+              <input type="text" name="origen" required />
+            </label>
+          </div>
+          <label>
+            Observaciones
+            <textarea name="observaciones" rows="3"></textarea>
+          </label>
+          <div class="actions-row">
+            <button id="createShortageBtn" class="btn btn-primary" type="submit">Guardar incidencia</button>
+          </div>
+        </form>
+
+        <div id="shortageMessage" class="status-banner" aria-live="polite"></div>
+        <div id="shortageLoading" class="loading hidden">Cargando problemas de suministro…</div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Medicamento</th>
+                <th>Estado</th>
+                <th>Fecha inicio</th>
+                <th>Fecha fin prevista</th>
+                <th>Observaciones</th>
+                <th>Origen</th>
+                <th>Actualizar estado</th>
+              </tr>
+            </thead>
+            <tbody id="shortagesTableBody"></tbody>
+          </table>
+        </div>
+        <p id="shortagesEmptyState" class="empty-state hidden">No hay incidencias registradas.</p>
+      </section>
     </div>
 
     <script src="config.js"></script>
