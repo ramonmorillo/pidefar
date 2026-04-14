@@ -43,6 +43,12 @@ body {
   letter-spacing: 0.02em;
 }
 
+.version-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 h1,
 h2 {
   margin: 0.2rem 0;
@@ -191,6 +197,35 @@ th {
   font-size: 0.9rem;
 }
 
+.counters-row {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  margin-bottom: 0.75rem;
+}
+
+.counter-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  background: #f8fafc;
+}
+
+.counter-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.counter-value {
+  margin: 0.15rem 0 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--primary-dark);
+}
+
 .status-banner.success {
   color: var(--success);
 }
@@ -296,6 +331,31 @@ th {
   background: #fee2e2;
 }
 
+.urgency-overdue {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.urgency-critical {
+  color: #9a3412;
+  background: #ffedd5;
+}
+
+.urgency-soon {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.urgency-ok {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.urgency-none {
+  color: #475569;
+  background: #e2e8f0;
+}
+
 .supply-ok {
   color: #166534;
   background: #dcfce7;
@@ -378,5 +438,9 @@ th {
   .filters input {
     flex: 1 1 100%;
     min-width: 100%;
+  }
+
+  .counters-row {
+    grid-template-columns: 1fr;
   }
 }

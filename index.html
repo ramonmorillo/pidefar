@@ -10,8 +10,9 @@
     <div class="app-shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">Servicio de Farmacia Hospitalaria</p>
+          <p class="eyebrow">Servicio de Farmacia - Hospital de Valme</p>
           <h1>Gestión de Solicitudes de Medicamentos</h1>
+          <p class="version-label">Versión Abril 2026</p>
         </div>
         <button id="refreshBtn" class="btn btn-secondary" type="button">Actualizar</button>
       </header>
@@ -35,10 +36,7 @@
                 <div id="cimaLoading" class="input-hint hidden">Buscando en CIMA…</div>
                 <ul id="cimaSuggestions" class="suggestions hidden" role="listbox" aria-label="Sugerencias de CIMA"></ul>
               </label>
-              <label>
-                Presentación
-                <input id="presentacionInput" type="text" name="presentacion" required />
-              </label>
+              <input id="presentacionInput" type="hidden" name="presentacion" />
               <label>
                 Fecha de necesidad
                 <input type="date" name="fecha_necesidad" required />
@@ -56,10 +54,6 @@
                   <option value="Alta">Alta</option>
                   <option value="Urgente">Urgente</option>
                 </select>
-              </label>
-              <label>
-                Motivo clínico / operativo
-                <input type="text" name="motivo" required />
               </label>
             </div>
 
@@ -106,6 +100,20 @@
                 Mostrar histórico / cerrados
               </label>
             </div>
+          </div>
+          <div id="statusCounters" class="counters-row">
+            <article class="counter-card">
+              <p class="counter-title">Pendientes</p>
+              <p id="counterPendiente" class="counter-value">0</p>
+            </article>
+            <article class="counter-card">
+              <p class="counter-title">En revisión</p>
+              <p id="counterRevision" class="counter-value">0</p>
+            </article>
+            <article class="counter-card">
+              <p class="counter-title">Pedido reciente</p>
+              <p id="counterPedidoReciente" class="counter-value">0</p>
+            </article>
           </div>
 
           <div id="statusMessage" class="status-banner" aria-live="polite"></div>
