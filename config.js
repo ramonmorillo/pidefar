@@ -9,3 +9,9 @@ const CIMA_CONFIG = {
   searchUrl: "https://cima.aemps.es/cima/rest/medicamentos",
   supplyUrl: "https://cima.aemps.es/cima/rest/psuministro",
 };
+
+window.APP_CONFIG = Object.freeze({
+  API_URL,
+  ADMIN_NAME,
+  CIMA_CONFIG,
+});
