@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Farmacia Hospitalaria | Solicitudes</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Servicio de Farmacia Hospitalaria</p>
+          <h1>Gestión de Solicitudes de Medicamentos</h1>
+        </div>
+        <button id="refreshBtn" class="btn btn-secondary" type="button">Actualizar</button>
+      </header>
+
+      <main class="grid-layout">
+        <section class="card form-card">
+          <h2>Crear solicitud</h2>
+          <form id="requestForm" novalidate>
+            <div class="form-grid">
+              <label>
+                Solicitante (created_by)
+                <input type="text" name="created_by" required />
+              </label>
+              <label>
+                Área
+                <input type="text" name="area" required />
+              </label>
+              <label>
+                Medicamento
+                <input type="text" name="medicamento" required />
+              </label>
+              <label>
+                Presentación
+                <input type="text" name="presentacion" required />
+              </label>
+              <label>
+                Cantidad
+                <input type="text" name="cantidad" required />
+              </label>
+              <label>
+                Prioridad
+                <select name="prioridad" required>
+                  <option value="">Selecciona prioridad</option>
+                  <option value="Baja">Baja</option>
+                  <option value="Media">Media</option>
+                  <option value="Alta">Alta</option>
+                  <option value="Urgente">Urgente</option>
+                </select>
+              </label>
+              <label>
+                Motivo
+                <input type="text" name="motivo" required />
+              </label>
+            </div>
+
+            <label>
+              Observaciones
+              <textarea name="observaciones" rows="3"></textarea>
+            </label>
+
+            <div class="actions-row">
+              <button id="createBtn" class="btn btn-primary" type="submit">Crear solicitud</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="card list-card">
+          <div class="section-head">
+            <h2>Listado de solicitudes</h2>
+            <div class="filters">
+              <select id="filterEstado">
+                <option value="">Todos los estados</option>
+              </select>
+              <select id="filterPrioridad">
+                <option value="">Todas las prioridades</option>
+                <option value="Baja">Baja</option>
+                <option value="Media">Media</option>
+                <option value="Alta">Alta</option>
+                <option value="Urgente">Urgente</option>
+              </select>
+              <input id="searchMedicamento" type="search" placeholder="Buscar medicamento..." />
+            </div>
+          </div>
+
+          <div id="statusMessage" class="status-banner" aria-live="polite"></div>
+
+          <div id="loadingState" class="loading hidden">Cargando solicitudes…</div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Medicamento</th>
+                  <th>Área</th>
+                  <th>Solicitante</th>
+                  <th>Prioridad</th>
+                  <th>Estado</th>
+                  <th>Observaciones</th>
+                  <th>Gestión</th>
+                </tr>
+              </thead>
+              <tbody id="requestsTableBody"></tbody>
+            </table>
+          </div>
+
+          <p id="emptyState" class="empty-state hidden">No hay solicitudes con los filtros actuales.</p>
+        </section>
+      </main>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
