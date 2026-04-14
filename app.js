@@ -14,6 +14,7 @@ const state = {
   cima: {
     debounceTimer: null,
     selected: null,
+    requestSeq: 0,
   },
 };
 
@@ -165,6 +166,8 @@ async function handleStatusChange(id, estado, selectElement) {
 
 function onMedicamentoInput(event) {
   const query = event.target.value.trim();
+  state.cima.selected = null;
+  renderCimaSelection();
   resetHiddenCimaFields();
 
   if (query.length < CIMA_CONFIG.minChars) {
@@ -180,12 +183,14 @@ function onMedicamentoInput(event) {
 }
 
 async function searchCima(query) {
+  const requestId = ++state.cima.requestSeq;
   setCimaLoading(true);
 
   try {
     const rawResults = await fetchCimaSearch(query);
-    const parsed = dedupeCimaOptions(parseCimaSearchResults(rawResults));
-    renderCimaSuggestions(parsed);
+    if (requestId !== state.cima.requestSeq) return;
+    const parsed = processCimaResults(rawResults, query);
+    renderCimaSuggestions(parsed, query);
   } catch (error) {
     // Nota: CIMA puede limitar peticiones CORS desde frontend puro según endpoint/entorno.
     // Por diseño la app sigue en modo manual aunque esta integración falle.
@@ -197,12 +202,21 @@ async function searchCima(query) {
 }
 
 async function fetchCimaSearch(query) {
-  const endpoint = `${CIMA_CONFIG.searchUrl}?q=${encodeURIComponent(query)}`;
+  const endpoint = buildCimaSearchUrl(query);
   const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
   if (!response.ok) {
     throw new Error(`CIMA HTTP ${response.status}`);
   }
   return response.json();
+}
+
+function buildCimaSearchUrl(query) {
+  const term = String(query || "").trim();
+  const url = new URL(CIMA_CONFIG.searchUrl);
+  if (term.length >= CIMA_CONFIG.minChars) {
+    url.searchParams.set("q", term);
+  }
+  return url.toString();
 }
 
 function parseCimaSearchResults(rawResults) {
@@ -232,14 +246,63 @@ function dedupeCimaOptions(options) {
     const key = `${option.cn}|${option.label}`.toLowerCase();
     if (!map.has(key)) map.set(key, option);
   });
-  return Array.from(map.values()).slice(0, CIMA_CONFIG.maxSuggestions);
+  return Array.from(map.values());
 }
 
-function renderCimaSuggestions(options) {
+function normalizeSearchText(value = "") {
+  return String(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim();
+}
+
+function processCimaResults(rawResults, query) {
+  const normalizedQuery = normalizeSearchText(query);
+  const deduped = dedupeCimaOptions(parseCimaSearchResults(rawResults));
+
+  if (!normalizedQuery) return [];
+
+  const startsWith = [];
+  const contains = [];
+
+  deduped.forEach((option) => {
+    const haystacks = [
+      option.nombre_cima,
+      option.medicamento_normalizado,
+      option.presentacion_normalizada,
+      option.label,
+    ]
+      .map(normalizeSearchText)
+      .filter(Boolean);
+
+    const matchesStarts = haystacks.some((value) => value.startsWith(normalizedQuery));
+    const matchesContains = haystacks.some((value) => value.includes(normalizedQuery));
+
+    if (matchesStarts) {
+      startsWith.push(option);
+    } else if (matchesContains) {
+      contains.push(option);
+    }
+  });
+
+  return [...startsWith, ...contains].slice(0, CIMA_CONFIG.maxSuggestions);
+}
+
+function renderCimaSuggestions(options, query) {
   dom.cimaSuggestions.innerHTML = "";
 
   if (!options.length) {
-    hideSuggestions();
+    const normalizedQuery = normalizeSearchText(query);
+    if (normalizedQuery.length >= CIMA_CONFIG.minChars) {
+      const item = document.createElement("li");
+      item.className = "empty";
+      item.textContent = "No se encontraron coincidencias";
+      dom.cimaSuggestions.appendChild(item);
+      dom.cimaSuggestions.classList.remove("hidden");
+    } else {
+      hideSuggestions();
+    }
     return;
   }
 
@@ -264,7 +327,7 @@ function hideSuggestions() {
 
 async function selectCimaOption(option) {
   state.cima.selected = option;
-  dom.medicamentoInput.value = option.medicamento_normalizado || option.nombre_cima;
+  dom.medicamentoInput.value = option.nombre_cima || option.medicamento_normalizado;
   dom.presentacionInput.value = option.presentacion_normalizada || dom.presentacionInput.value;
 
   fillHiddenCimaFields(option);
