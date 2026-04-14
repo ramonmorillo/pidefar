@@ -2,6 +2,8 @@ const STATUS_OPTIONS = ["Pendiente", "En revisión", "Pedido", "Recibido", "Canc
 const SHORTAGE_STATUS_OPTIONS = ["activo", "resuelto"];
 const CLOSED_STATES = new Set(["recibido", "cancelado", "no necesario"]);
 const AUTO_REFRESH_MS = 60000;
+const APP_CONFIG = window.APP_CONFIG || {};
+const RESOLVED_ADMIN_NAME = String(APP_CONFIG.ADMIN_NAME || (typeof ADMIN_NAME !== "undefined" ? ADMIN_NAME : "")).trim();
 
 const state = {
   activeTab: "solicitudes",
@@ -63,10 +65,20 @@ const dom = {
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
+  initializeUserContext();
   bindEvents();
+  renderAdminControls();
   await loadAllData();
   setupAutoRefresh();
 });
+
+function initializeUserContext() {
+  state.user.name = RESOLVED_ADMIN_NAME;
+  state.user.isAdmin = normalizeSearchText(state.user.name) === normalizeSearchText(RESOLVED_ADMIN_NAME);
+  if (dom.form?.elements?.created_by) {
+    dom.form.elements.created_by.value = state.user.name;
+  }
+}
 
 function bindEvents() {
   dom.form.addEventListener("submit", handleCreateRequest);
@@ -122,7 +134,7 @@ async function loadAllData({ silent = false } = {}) {
 
 function handleIdentityChange(event) {
   state.user.name = event.target.value.trim();
-  state.user.isAdmin = normalizeSearchText(state.user.name) === normalizeSearchText(ADMIN_NAME || "");
+  state.user.isAdmin = normalizeSearchText(state.user.name) === normalizeSearchText(RESOLVED_ADMIN_NAME);
   renderAdminControls();
   renderShortagesTable();
 }
@@ -136,7 +148,10 @@ function renderAdminControls() {
 }
 
 function showShortageForm() {
-  if (!state.user.isAdmin) return;
+  if (!state.user.isAdmin) {
+    showMessage("Solo el usuario administrador puede crear incidencias de suministro.", "error");
+    return;
+  }
   dom.shortageForm.classList.remove("hidden");
   dom.shortageMedicamentoInput.value = dom.medicamentoInput.value.trim();
 }
@@ -225,7 +240,10 @@ async function handleCreateRequest(event) {
 
 async function handleCreateShortage(event) {
   event.preventDefault();
-  if (!state.user.isAdmin) return;
+  if (!state.user.isAdmin) {
+    showMessage("No autorizado: solo el usuario administrador puede guardar incidencias.", "error");
+    return;
+  }
   if (!dom.shortageForm.reportValidity()) return;
 
   const formData = new FormData(dom.shortageForm);
@@ -234,16 +252,15 @@ async function handleCreateShortage(event) {
 
   dom.saveShortageBtn.disabled = true;
   try {
+    console.debug("[shortages] create_shortage payload", payload);
     const created = await postToApi({ action: "create_shortage", payload });
-    const fromServer = created?.data || created?.item || created?.payload || {};
-    state.shortages.unshift({
-      ...payload,
-      ...fromServer,
-      id: fromServer.id || `short-${Date.now()}`,
-    });
+    console.debug("[shortages] create_shortage response", created);
+    const createdId = created?.id || created?.data?.id || created?.item?.id || created?.payload?.id;
+    if (createdId) {
+      payload.id = createdId;
+    }
     hideShortageForm();
-    renderShortagesTable();
-    renderTable();
+    await loadShortages({ silent: true });
     showMessage("✅ Incidencia de suministro creada.", "success");
   } catch (error) {
     showMessage(`No se pudo crear la incidencia. ${error.message}`, "error");
