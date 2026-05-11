@@ -488,6 +488,11 @@ function renderCimaSuggestions(options, query) {
     item.setAttribute("role", "option");
     item.innerHTML = `<div class="primary">${escapeHtml(option.label)}</div><div class="secondary">CN: ${escapeHtml(option.cn || "No disponible")}</div>`;
 
+    item.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      selectCimaOption(option);
+    });
+
     item.addEventListener("click", async () => {
       await selectCimaOption(option);
     });
