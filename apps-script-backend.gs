@@ -82,6 +82,7 @@ function createRequest_(payload) {
   setByHeader_(row, map, 'prioridad', payload.prioridad || '');
   setByHeader_(row, map, 'motivo', payload.motivo || '');
   setByHeader_(row, map, 'observaciones', payload.observaciones || '');
+  setByHeader_(row, map, 'extranjeros', payload.extranjeros || '');
 
   setByHeader_(row, map, 'estado', payload.estado || 'Pendiente');
 

@@ -653,6 +653,7 @@ function renderTable() {
       <td><span class="tag ${priorityClass(item.prioridad)}">${escapeHtml(item.prioridad || "-")}</span></td>
       <td><span class="tag ${stateClass(item.estado)}">${escapeHtml(item.estado || "Pendiente")}</span></td>
       <td>${escapeHtml(item.observaciones || "-")}</td>
+      <td>${escapeHtml(item.extranjeros || "-")}</td>
       <td>
         <span class="tag ${supplyInfo.css}" title="${escapeHtml(supplyInfo.note || "")}">${escapeHtml(supplyInfo.label)}</span>
         ${shortageAlert ? `<div class="tag shortage-linked" title="${escapeHtml(shortageAlert.note)}">Problema de suministro</div>` : ""}

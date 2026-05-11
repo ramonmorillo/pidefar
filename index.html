@@ -38,7 +38,7 @@
                 </label>
                 <label class="medicamento-field">
                   Medicamento
-                  <input id="medicamentoInput" type="text" name="medicamento" autocomplete="off" required />
+                  <input id="medicamentoInput" type="text" name="medicamento" autocomplete="off" />
                   <div id="cimaLoading" class="input-hint hidden">Buscando en CIMA…</div>
                   <ul id="cimaSuggestions" class="suggestions hidden" role="listbox" aria-label="Sugerencias de CIMA"></ul>
                 </label>
@@ -62,6 +62,11 @@
                   </select>
                 </label>
               </div>
+
+              <label>
+                Extranjeros
+                <textarea name="extranjeros" rows="2"></textarea>
+              </label>
 
               <label>
                 Observaciones
@@ -139,6 +144,7 @@
                     <th>Prioridad</th>
                     <th>Estado</th>
                     <th>Observaciones</th>
+                    <th>Extranjeros</th>
                     <th>Alerta suministro</th>
                     <th>Gestión</th>
                   </tr>
