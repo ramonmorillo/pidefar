@@ -29,6 +29,13 @@
             <form id="requestForm" novalidate>
               <div class="form-grid">
                 <label>
+                  Perfil
+                  <select id="profileSelect" name="profile">
+                    <option value="solicitante">Solicitante</option>
+                    <option value="tramitador">Tramitador de pedidos</option>
+                  </select>
+                </label>
+                <label>
                   Solicitante
                   <input type="text" name="created_by" required />
                 </label>
@@ -143,7 +150,8 @@
                     <th>Solicitante</th>
                     <th>Prioridad</th>
                     <th>Estado</th>
-                    <th>Observaciones</th>
+                    <th>Observaciones solicitante</th>
+                    <th>Observaciones tramitador</th>
                     <th>Extranjeros</th>
                     <th>Alerta suministro</th>
                     <th>Gestión</th>

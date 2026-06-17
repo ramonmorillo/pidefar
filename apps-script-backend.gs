@@ -39,6 +39,11 @@ function doPost(e) {
       return jsonResponse({ ok: true, item: updated });
     }
 
+    if (action === 'update_processor_notes') {
+      const updated = updateProcessorNotes_(payload);
+      return jsonResponse({ ok: true, item: updated });
+    }
+
     if (action === 'create_shortage') {
       const created = createShortage(payload);
       return jsonResponse({ ok: true, item: created });
@@ -82,6 +87,7 @@ function createRequest_(payload) {
   setByHeader_(row, map, 'prioridad', payload.prioridad || '');
   setByHeader_(row, map, 'motivo', payload.motivo || '');
   setByHeader_(row, map, 'observaciones', payload.observaciones || '');
+  setByHeader_(row, map, 'observaciones_tramitador', payload.observaciones_tramitador || '');
   setByHeader_(row, map, 'extranjeros', payload.extranjeros || '');
 
   setByHeader_(row, map, 'estado', payload.estado || 'Pendiente');
@@ -118,6 +124,31 @@ function updateStatus_(payload) {
         const cierre = FINAL_STATES.indexOf(newStatus) >= 0 ? new Date().toISOString() : '';
         sheet.getRange(rowNumber, map.fecha_cierre + 1).setValue(cierre);
       }
+
+      const refreshed = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
+      return rowToObject_(headers, refreshed);
+    }
+  }
+
+  throw new Error('No se encontró solicitud para ese id');
+}
+
+function updateProcessorNotes_(payload) {
+  const { sheet, headers, map } = getSheetWithHeaders_();
+  const id = String(payload.id || '');
+
+  if (!id) throw new Error('Falta payload.id');
+  if (map.observaciones_tramitador === undefined) {
+    throw new Error('Falta columna requerida: observaciones_tramitador');
+  }
+
+  const idCol = getRequiredIndex_(map, 'id') + 1;
+  const data = sheet.getDataRange().getValues();
+
+  for (let r = 1; r < data.length; r++) {
+    if (String(data[r][idCol - 1]) === id) {
+      const rowNumber = r + 1;
+      sheet.getRange(rowNumber, map.observaciones_tramitador + 1).setValue(payload.observaciones_tramitador || '');
 
       const refreshed = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
       return rowToObject_(headers, refreshed);

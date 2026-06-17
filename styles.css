@@ -441,6 +441,22 @@ th {
   width: 120px;
 }
 
+.processor-notes-control {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 180px;
+}
+
+.processor-notes-input {
+  min-width: 180px;
+  resize: vertical;
+}
+
+.processor-notes-save {
+  justify-self: start;
+  padding: 0.4rem 0.7rem;
+}
+
 .suggestions {
   list-style: none;
   margin: 0.35rem 0 0;

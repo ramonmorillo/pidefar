@@ -2,6 +2,7 @@ const STATUS_OPTIONS = ["Pendiente", "En revisión", "Pedido", "Recibido", "Canc
 const SHORTAGE_STATUS_OPTIONS = ["activo", "resuelto"];
 const CLOSED_STATES = new Set(["recibido", "cancelado", "no necesario"]);
 const AUTO_REFRESH_MS = 60000;
+const RESOLVED_SHORTAGE_VISIBLE_MS = 24 * 60 * 60 * 1000;
 const APP_CONFIG = window.APP_CONFIG || {};
 const RESOLVED_ADMIN_NAME = String(APP_CONFIG.ADMIN_NAME || (typeof ADMIN_NAME !== "undefined" ? ADMIN_NAME : "")).trim();
 console.log("API_URL:", API_URL);
@@ -25,6 +26,7 @@ const state = {
   },
   user: {
     name: "",
+    profile: "solicitante",
     isAdmin: false,
   },
 };
@@ -43,6 +45,7 @@ const dom = {
   filterArea: document.getElementById("filterArea"),
   filterFechaNecesidad: document.getElementById("filterFechaNecesidad"),
   showHistorical: document.getElementById("showHistorical"),
+  profileSelect: document.getElementById("profileSelect"),
   medicamentoInput: document.getElementById("medicamentoInput"),
   presentacionInput: document.getElementById("presentacionInput"),
   cimaSuggestions: document.getElementById("cimaSuggestions"),
@@ -75,7 +78,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 function initializeUserContext() {
   state.user.name = RESOLVED_ADMIN_NAME;
-  state.user.isAdmin = normalizeSearchText(state.user.name) === normalizeSearchText(RESOLVED_ADMIN_NAME);
+  state.user.profile = dom.profileSelect?.value || "solicitante";
+  state.user.isAdmin = isProcessingUser();
   if (dom.form?.elements?.created_by) {
     dom.form.elements.created_by.value = state.user.name;
   }
@@ -85,6 +89,7 @@ function bindEvents() {
   dom.form.addEventListener("submit", handleCreateRequest);
   dom.refreshBtn.addEventListener("click", () => loadAllData());
   dom.form.elements.created_by.addEventListener("input", handleIdentityChange);
+  dom.profileSelect.addEventListener("change", handleProfileChange);
 
   dom.filterEstado.addEventListener("change", (event) => {
     state.filters.estado = event.target.value;
@@ -135,9 +140,22 @@ async function loadAllData({ silent = false } = {}) {
 
 function handleIdentityChange(event) {
   state.user.name = event.target.value.trim();
-  state.user.isAdmin = normalizeSearchText(state.user.name) === normalizeSearchText(RESOLVED_ADMIN_NAME);
+  state.user.isAdmin = isProcessingUser();
   renderAdminControls();
   renderShortagesTable();
+  renderTable();
+}
+
+function handleProfileChange(event) {
+  state.user.profile = event.target.value || "solicitante";
+  state.user.isAdmin = isProcessingUser();
+  renderAdminControls();
+  renderShortagesTable();
+  renderTable();
+}
+
+function isProcessingUser() {
+  return state.user.profile === "tramitador" || normalizeSearchText(state.user.name) === normalizeSearchText(RESOLVED_ADMIN_NAME);
 }
 
 function renderAdminControls() {
@@ -328,7 +346,10 @@ async function handleShortageStatusChange(id, estado, selectElement) {
     });
 
     const target = state.shortages.find((item) => String(item.id) === String(id));
-    if (target) target.estado = estado;
+    if (target) {
+      target.estado = estado;
+      target.updated_at = new Date().toISOString();
+    }
 
     selectElement.dataset.previous = estado;
     renderShortagesTable();
@@ -658,24 +679,34 @@ function renderTable() {
       <td><span class="tag ${priorityClass(item.prioridad)}">${escapeHtml(item.prioridad || "-")}</span></td>
       <td><span class="tag ${stateClass(item.estado)}">${escapeHtml(item.estado || "Pendiente")}</span></td>
       <td>${escapeHtml(item.observaciones || "-")}</td>
+      <td>${renderProcessorNotesCell(item)}</td>
       <td>${escapeHtml(item.extranjeros || "-")}</td>
       <td>
         <span class="tag ${supplyInfo.css}" title="${escapeHtml(supplyInfo.note || "")}">${escapeHtml(supplyInfo.label)}</span>
         ${shortageAlert ? `<div class="tag shortage-linked" title="${escapeHtml(shortageAlert.note)}">Problema de suministro</div>` : ""}
       </td>
       <td>
-        <select class="status-select" data-id="${escapeHtml(String(item.id || ""))}">
-          ${STATUS_OPTIONS.map((status) => `<option value="${status}" ${status === (item.estado || "Pendiente") ? "selected" : ""}>${status}</option>`).join("")}
-        </select>
+        ${state.user.isAdmin
+          ? `<select class="status-select" data-id="${escapeHtml(String(item.id || ""))}">
+              ${STATUS_OPTIONS.map((status) => `<option value="${status}" ${status === (item.estado || "Pendiente") ? "selected" : ""}>${status}</option>`).join("")}
+            </select>`
+          : "-"}
       </td>
     `;
 
     const selector = row.querySelector(".status-select");
-    selector.dataset.previous = item.estado || "Pendiente";
-    selector.addEventListener("change", (event) => {
-      const selectedStatus = event.target.value;
-      handleStatusChange(item.id, selectedStatus, event.target);
-    });
+    if (selector) {
+      selector.dataset.previous = item.estado || "Pendiente";
+      selector.addEventListener("change", (event) => {
+        const selectedStatus = event.target.value;
+        handleStatusChange(item.id, selectedStatus, event.target);
+      });
+    }
+
+    const saveNotesBtn = row.querySelector(".processor-notes-save");
+    if (saveNotesBtn) {
+      saveNotesBtn.addEventListener("click", () => handleProcessorNotesSave(item.id, row));
+    }
 
     dom.tableBody.appendChild(row);
   });
@@ -684,14 +715,16 @@ function renderTable() {
 function renderShortagesTable() {
   dom.shortagesTableBody.innerHTML = "";
 
-  if (!state.shortages.length) {
+  const visibleShortages = getVisibleShortages();
+
+  if (!visibleShortages.length) {
     dom.shortagesEmptyState.classList.remove("hidden");
     return;
   }
 
   dom.shortagesEmptyState.classList.add("hidden");
 
-  state.shortages.forEach((item) => {
+  visibleShortages.forEach((item) => {
     const row = document.createElement("tr");
     const statusValue = (item.estado || "activo").toLowerCase();
     row.innerHTML = `
@@ -724,11 +757,64 @@ function renderShortagesTable() {
   });
 }
 
+function renderProcessorNotesCell(item) {
+  if (!state.user.isAdmin) {
+    return escapeHtml(item.observaciones_tramitador || "-");
+  }
+
+  return `
+    <div class="processor-notes-control">
+      <textarea class="processor-notes-input" rows="3">${escapeHtml(item.observaciones_tramitador || "")}</textarea>
+      <button class="btn btn-secondary processor-notes-save" type="button" data-id="${escapeHtml(String(item.id || ""))}">Guardar</button>
+    </div>
+  `;
+}
+
+async function handleProcessorNotesSave(id, row) {
+  const button = row.querySelector(".processor-notes-save");
+  const textarea = row.querySelector(".processor-notes-input");
+  const observacionesTramitador = textarea?.value.trim() || "";
+  if (!button || !textarea) return;
+
+  button.disabled = true;
+  try {
+    await postToApi({
+      action: "update_processor_notes",
+      payload: {
+        id,
+        observaciones_tramitador: observacionesTramitador,
+        updated_by: state.user.name || "tramitador",
+      },
+    });
+
+    const target = state.requests.find((item) => String(item.id) === String(id));
+    if (target) {
+      target.observaciones_tramitador = observacionesTramitador;
+      target.updated_at = new Date().toISOString();
+    }
+    showMessage("✅ Observaciones del tramitador guardadas.", "success");
+  } catch (error) {
+    showMessage(`No se pudieron guardar las observaciones del tramitador: ${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function getVisibleShortages() {
+  return state.shortages.filter((shortage) => {
+    const status = normalizeSearchText(shortage.estado || "activo");
+    if (status !== "resuelto") return true;
+
+    const updatedAt = new Date(shortage.updated_at || shortage.fecha_resolucion || shortage.fecha_fin_prevista || 0).getTime();
+    return updatedAt && Date.now() - updatedAt <= RESOLVED_SHORTAGE_VISIBLE_MS;
+  });
+}
+
 function getShortageAlert(item) {
   const medicamento = normalizeSearchText(item.medicamento || item.medicamento_normalizado || "");
   if (!medicamento) return null;
 
-  const activeShortage = state.shortages.find((shortage) => {
+  const activeShortage = getVisibleShortages().find((shortage) => {
     const shortageMed = normalizeSearchText(shortage.medicamento || "");
     const isActive = normalizeSearchText(shortage.estado || "activo") === "activo";
     return isActive && shortageMed && (medicamento.includes(shortageMed) || shortageMed.includes(medicamento));
