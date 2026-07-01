@@ -239,6 +239,7 @@ async function handleCreateRequest(event) {
 
   const formData = new FormData(dom.form);
   const payload = Object.fromEntries(formData.entries());
+  payload.cantidad = String(payload.cantidad || "").trim();
   payload.estado = payload.estado || "Pendiente";
 
   dom.createBtn.disabled = true;
@@ -673,7 +674,7 @@ function renderTable() {
         <span class="tag ${urgency.css}">${escapeHtml(urgency.label)}</span>
       </td>
       <td>${escapeHtml(item.medicamento || item.medicamento_normalizado || "-")}</td>
-      <td>${escapeHtml(item.cantidad || "-")}</td>
+      <td>${escapeHtml(getRequestQuantity(item))}</td>
       <td>${escapeHtml(item.presentacion || item.presentacion_normalizada || "-")}</td>
       <td>${escapeHtml(item.area || "-")}</td>
       <td>${escapeHtml(item.created_by || "-")}</td>
@@ -711,6 +712,12 @@ function renderTable() {
 
     dom.tableBody.appendChild(row);
   });
+}
+
+function getRequestQuantity(item) {
+  const value = item.cantidad ?? item.Cantidad ?? item.quantity ?? item.Quantity;
+  const normalized = String(value ?? "").trim();
+  return normalized || "-";
 }
 
 function renderShortagesTable() {
