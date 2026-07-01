@@ -673,6 +673,7 @@ function renderTable() {
         <span class="tag ${urgency.css}">${escapeHtml(urgency.label)}</span>
       </td>
       <td>${escapeHtml(item.medicamento || item.medicamento_normalizado || "-")}</td>
+      <td>${escapeHtml(item.cantidad || "-")}</td>
       <td>${escapeHtml(item.presentacion || item.presentacion_normalizada || "-")}</td>
       <td>${escapeHtml(item.area || "-")}</td>
       <td>${escapeHtml(item.created_by || "-")}</td>
