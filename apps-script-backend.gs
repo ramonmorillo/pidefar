@@ -236,6 +236,10 @@ function getSheetWithHeadersByName_(sheetName) {
   const map = {};
   headers.forEach((h, idx) => {
     map[h] = idx;
+    const normalized = normalizeHeaderName_(h);
+    if (normalized && map[normalized] === undefined) {
+      map[normalized] = idx;
+    }
   });
 
   return { sheet, headers, map };
@@ -249,15 +253,37 @@ function getRequiredIndex_(map, header) {
 }
 
 function setByHeader_(row, map, header, value) {
-  if (map[header] !== undefined) {
-    row[map[header]] = value;
+  const index = resolveHeaderIndex_(map, header);
+  if (index !== undefined) {
+    row[index] = value;
   }
+}
+
+function resolveHeaderIndex_(map, header) {
+  if (map[header] !== undefined) return map[header];
+  return map[normalizeHeaderName_(header)];
+}
+
+function normalizeHeaderName_(header) {
+  return String(header || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 
 function rowToObject_(headers, row) {
   const out = {};
   headers.forEach((h, i) => {
-    out[h] = row[i];
+    const value = row[i];
+    out[h] = value;
+
+    const normalized = normalizeHeaderName_(h);
+    if (normalized && out[normalized] === undefined) {
+      out[normalized] = value;
+    }
   });
   return out;
 }
