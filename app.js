@@ -249,7 +249,13 @@ async function handleCreateRequest(event) {
     upsertCreatedRequest(payload, created);
     dom.form.reset();
     resetCimaSelection();
-    showMessage(`✅ Solicitud creada para "${payload.medicamento || payload.medicamento_normalizado || "medicamento"}".`, "success");
+    const savedItem = created?.item || created?.data || {};
+    if (String(payload.extranjeros || "").trim() && !Object.prototype.hasOwnProperty.call(savedItem, "extranjeros")) {
+      // El backend desplegado no tiene la columna "extranjeros": el texto no se ha guardado y desaparecerá al refrescar.
+      showMessage("⚠️ Solicitud creada, pero el campo Extranjeros NO se ha guardado: el Apps Script desplegado no tiene la columna \"extranjeros\". Publica una nueva versión del backend.", "error");
+    } else {
+      showMessage(`✅ Solicitud creada para "${payload.medicamento || payload.medicamento_normalizado || "medicamento"}".`, "success");
+    }
     renderTable();
   } catch (error) {
     showMessage(`No se pudo crear la solicitud. ${error.message}`, "error");
