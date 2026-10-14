@@ -69,6 +69,7 @@ function listRequests_() {
 }
 
 function createRequest_(payload) {
+  ensureColumn_(SHEET_NAME, 'extranjeros');
   const { sheet, headers, map } = getSheetWithHeaders_();
 
   const now = new Date();
@@ -243,6 +244,13 @@ function getSheetWithHeadersByName_(sheetName) {
   });
 
   return { sheet, headers, map };
+}
+
+function ensureColumn_(sheetName, header) {
+  const { sheet, map } = getSheetWithHeadersByName_(sheetName);
+  if (resolveHeaderIndex_(map, header) === undefined) {
+    sheet.getRange(1, sheet.getLastColumn() + 1).setValue(header);
+  }
 }
 
 function getRequiredIndex_(map, header) {
